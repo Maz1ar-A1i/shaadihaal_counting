@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+print("--- [DEBUG] Main: Starting Import Sequence... ---")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize DB, Scheduler, etc.
@@ -20,7 +22,8 @@ async def lifespan(app: FastAPI):
     
     # Start Scheduler
     from .services.scheduler_service import scheduler_service
-    logger.info("Scheduler started via explicit import.")
+    scheduler_service.start()
+    logger.info("Scheduler started via explicit call.")
 
     yield
     # Shutdown: Clean up resources
@@ -38,10 +41,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .api import cameras, zones, stats
+print("--- [DEBUG] Main: Importing API Routers... ---")
+from .api import cameras, zones, stats, system
 app.include_router(cameras.router)
 app.include_router(zones.router)
 app.include_router(stats.router)
+print("--- [DEBUG] Main: Including System Router... ---")
+app.include_router(system.router)
+print("--- [DEBUG] Main: Routers Included. ---")
 
 @app.post("/debug/trigger")
 async def trigger_detection():

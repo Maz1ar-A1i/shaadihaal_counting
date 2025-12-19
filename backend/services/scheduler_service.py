@@ -26,19 +26,38 @@ IMAGE_DIR = "images"
 if not os.path.exists(IMAGE_DIR):
     os.makedirs(IMAGE_DIR)
 
+print("--- [DEBUG] SchedulerService: Importing... ---")
 class SchedulerService:
     def __init__(self):
+        print("--- [DEBUG] SchedulerService: Initializing Instance... ---")
         self.scheduler = BackgroundScheduler()
-        # Run immediately on start, then every 1 minute
+        self.is_paused = False
+        # Schedule job but DO NOT start scheduler yet
         self.scheduler.add_job(self.check_and_run_cycle, 'interval', minutes=1, next_run_time=datetime.now())
-        self.scheduler.start()
+        
+    def start(self):
+        if not self.scheduler.running:
+            self.scheduler.start()
+            logger.info("Scheduler started.")
     
+    def pause(self):
+        logger.info("System Paused")
+        self.is_paused = True
+        
+    def resume(self):
+        logger.info("System Resumed")
+        self.is_paused = False
+
     def check_and_run_cycle(self, force: bool = False):
         """
         Runs every minute.
         Checks if we need to start a session or perform a capture within an active session.
         If force=True, ignores time gaps.
         """
+        if self.is_paused and not force:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER PAUSED (Skipping)")
+            return
+
         db = SessionLocal()
         print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER TICK CHECK") # Visible heartbeat
         try:

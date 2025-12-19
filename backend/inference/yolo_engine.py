@@ -11,10 +11,12 @@ class InferenceEngine:
         self.load_model()
 
     def load_model(self):
+        print("--- [DEBUG] YOLOEngine: Loading Model... ---")
         logger.info("Loading YOLOv8 Model (Nano)...")
         try:
             # Load YOLOv8n (nano) model - fast and sufficient for people counting
             self.model = YOLO('yolov8n.pt') 
+            print("--- [DEBUG] YOLOEngine: Model LOADED ---")
             logger.info("YOLOv8 Model loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to load YOLOv8 model: {e}")
