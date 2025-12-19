@@ -32,8 +32,10 @@ class SchedulerService:
         print("--- [DEBUG] SchedulerService: Initializing Instance... ---")
         self.scheduler = BackgroundScheduler()
         self.is_paused = False
-        # Schedule job but DO NOT start scheduler yet
-        self.scheduler.add_job(self.check_and_run_cycle, 'interval', minutes=1, next_run_time=datetime.now())
+        self.scheduled_start_time = None # Format "HH:MM"
+        # Use 'cron' to trigger exactly at the top of every minute (:00 seconds)
+        # This ensures we catch the hh:mm transition instantly
+        self.scheduler.add_job(self.check_and_run_cycle, 'cron', second='0', next_run_time=datetime.now())
         
     def start(self):
         if not self.scheduler.running:
@@ -48,6 +50,11 @@ class SchedulerService:
         logger.info("System Resumed")
         self.is_paused = False
 
+    def set_schedule(self, time_str: str):
+        """Set auto-start time in HH:MM format"""
+        self.scheduled_start_time = time_str
+        logger.info(f"Scheduled start time set to {time_str}")
+
     def check_and_run_cycle(self, force: bool = False):
         """
         Runs every minute.
@@ -55,8 +62,22 @@ class SchedulerService:
         If force=True, ignores time gaps.
         """
         if self.is_paused and not force:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER PAUSED (Skipping)")
-            return
+            # Check if we should auto-start
+            current_time = datetime.now().strftime("%H:%M")
+            if self.scheduled_start_time:
+                print(f"--- [DEBUG] PAUSED Loop. Current: {current_time} | Scheduled: {self.scheduled_start_time} ---")
+                
+                if current_time == self.scheduled_start_time:
+                    print(f"--- [DEBUG] Auto-Start MATCHED! Resuming... ---")
+                    self.resume()
+                    # We continue execution below (don't return)
+                else:
+                    # Only print every once in a while to avoid spam? No, spam is good for debug right now.
+                    # print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER PAUSED (Waiting for {self.scheduled_start_time})")
+                    return
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER PAUSED (No Schedule)")
+                return
 
         db = SessionLocal()
         print(f"[{datetime.now().strftime('%H:%M:%S')}] SCHEDULER TICK CHECK") # Visible heartbeat
