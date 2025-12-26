@@ -9,8 +9,15 @@ export default function Dashboard() {
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const [isPaused, setIsPaused] = useState<boolean>(false);
     const [scheduledTime, setScheduledTime] = useState<string>('');
+    const [captureInterval, setCaptureInterval] = useState<number>(5);
+    const [isSessionActive, setIsSessionActive] = useState<boolean>(false);
 
     useEffect(() => {
+        // Initial load of config
+        fetch('http://localhost:8000/system/status').then(r => r.json()).then(data => {
+            if (data.capture_interval_minutes) setCaptureInterval(data.capture_interval_minutes);
+        });
+
         loadData();
         fetchSystemStatus();
         const interval = setInterval(() => {
@@ -27,6 +34,8 @@ export default function Dashboard() {
             const data = await res.json();
             setIsPaused(data.is_paused);
             if (data.scheduled_start_time) setScheduledTime(data.scheduled_start_time);
+            if (data.is_session_active !== undefined) setIsSessionActive(data.is_session_active);
+            // Don't auto-update interval to avoid overwriting user input while typing
         } catch (e) {
             console.error("Failed to fetch system status", e);
         }
@@ -42,6 +51,18 @@ export default function Dashboard() {
             // Optional: Add visual feedback
         } catch (e) {
             console.error("Failed to save schedule", e);
+        }
+    };
+
+    const saveInterval = async () => {
+        try {
+            await fetch('http://localhost:8000/system/interval', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minutes: captureInterval })
+            });
+        } catch (e) {
+            console.error("Failed to save interval", e);
         }
     };
 
@@ -68,10 +89,36 @@ export default function Dashboard() {
         }
     };
 
+    const finishSession = async () => {
+        if (!confirm("Are you sure you want to finish the current session? This will calculate stats and archive it.")) return;
+        try {
+            await fetch('http://localhost:8000/system/stop_session', { method: 'POST' });
+            loadData();
+            alert("Session Finished");
+        } catch (e) {
+            console.error("Failed to stop session", e);
+        }
+    };
+
+    const startSession = async () => {
+        try {
+            await fetch('http://localhost:8000/system/start_session', { method: 'POST' });
+            loadData();
+            alert("Session Started");
+        } catch (e) {
+            console.error("Failed to start session", e);
+        }
+    };
+
     const loadData = async () => {
         try {
             const cams = await getCameras();
             setCameras(cams);
+
+            // Fetch initial system status only once for settings
+            if (refreshKey === Date.now()) { // This check is weak, better to use separate effect or just check active
+                // Actually, let's just do a separate fetch for config on mount
+            }
 
             // Get latest history for stats
             const history = await getHistory();
@@ -106,6 +153,25 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex gap-4 items-center">
+                    {/* Interval Control */}
+                    <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-xl border border-white/10">
+                        <label className="text-xs text-slate-400 font-medium px-2">INTERVAL (MIN):</label>
+                        <input
+                            type="number"
+                            min="1"
+                            value={captureInterval}
+                            onChange={(e) => setCaptureInterval(parseInt(e.target.value) || 1)}
+                            className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                        <button
+                            onClick={saveInterval}
+                            className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition-colors"
+                            title="Save Interval"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                    </div>
+
                     {/* Schedule Control */}
                     <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-xl border border-white/10">
                         <label className="text-xs text-slate-400 font-medium px-2">AUTO-START:</label>
@@ -124,25 +190,49 @@ export default function Dashboard() {
                         </button>
                     </div>
 
-                    <button
-                        onClick={toggleSystemPause}
-                        className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 transform active:scale-95 shadow-lg flex items-center gap-2 ${isPaused
-                            ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
-                            : 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/20'
-                            }`}
-                    >
-                        {isPaused ? (
-                            <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                RESUME SYSTEM
-                            </>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={toggleSystemPause}
+                            className={`px-4 py-2 rounded-xl font-bold transition-all duration-300 transform active:scale-95 shadow-lg flex items-center justify-center gap-2 text-sm ${isPaused
+                                ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
+                                : 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/20'
+                                }`}
+                        >
+                            {isPaused ? (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    RESUME
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    PAUSE
+                                    PAUSE
+                                </>
+                            )}
+                        </button>
+
+                        {/* Show Start/Finish based on state */}
+                        {isSessionActive ? (
+                            <button
+                                onClick={finishSession}
+                                className="px-4 py-2 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                title="End current session and archive data"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+                                FINISH SESSION
+                            </button>
                         ) : (
-                            <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
-                                STOP ALL CAMERAS
-                            </>
+                            <button
+                                onClick={startSession}
+                                className="px-4 py-2 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                title="Start a new recording session"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                START SESSION
+                            </button>
                         )}
-                    </button>
+                    </div>
                 </div>
             </div>
 
@@ -214,7 +304,7 @@ export default function Dashboard() {
                                                 : 'bg-emerald-500/80 hover:bg-emerald-600 text-white'
                                             }`}
                                     >
-                                        {isPaused ? 'PAUSED' : (displayEnabled ? 'STOP' : 'START')}
+                                        {isPaused ? 'PAUSED' : (displayEnabled ? 'OFF' : 'ON')}
                                     </button>
                                 </div>
                             </div>
