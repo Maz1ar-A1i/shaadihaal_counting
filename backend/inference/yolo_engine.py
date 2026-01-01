@@ -1,6 +1,7 @@
 import logging
+import os
 import numpy as np
-from ultralytics import YOLO
+from ultralytics import SAM
 from shapely.geometry import Point, Polygon
 
 logger = logging.getLogger(__name__)
@@ -11,32 +12,39 @@ class InferenceEngine:
         self.load_model()
 
     def load_model(self):
-        print("--- [DEBUG] YOLOEngine: Loading Model... ---")
-        logger.info("Loading YOLOv8 Model (Nano)...")
+        print("--- [DEBUG] SAM3Engine: Loading Model... ---")
+        logger.info("Loading SAM 3 Model...")
         try:
-            # Load YOLOv8n (nano) model - fast and sufficient for people counting
-            self.model = YOLO('yolov8n.pt') 
-            print("--- [DEBUG] YOLOEngine: Model LOADED ---")
-            logger.info("YOLOv8 Model loaded successfully.")
+            # Load SAM 3 model
+            # Assuming sam3.pt is in the backend directory or root
+            model_path = 'backend/sam3.pt'
+            if not os.path.exists(model_path):
+                # Fallback to check current dir
+                model_path = 'sam3.pt'
+            
+            from ultralytics import SAM
+            self.model = SAM(model_path) 
+            print("--- [DEBUG] SAM3Engine: Model LOADED ---")
+            logger.info("SAM 3 Model loaded successfully.")
         except Exception as e:
-            logger.error(f"Failed to load YOLOv8 model: {e}")
+            logger.error(f"Failed to load SAM 3 model: {e}")
             self.model = None
 
     def detect_people(self, image_path: str, zones: list) -> int:
         """
-        Runs detection on the image using YOLOv8.
-        Filters results to count only people (class 0) that are inside the specified zones.
+        Runs detection on the image using SAM 3 with text prompt 'person'.
+        Filters results to count only people that are inside the specified zones.
         """
         if self.model is None:
-            logger.error("YOLO Model not loaded")
+            logger.error("SAM 3 Model not loaded")
             return 0
 
-        logger.info(f"Running YOLO inference on {image_path}")
+        logger.info(f"Running SAM 3 inference on {image_path}")
         
         try:
-            # Run inference
-            # classes=[0] filters for 'person' class only
-            results = self.model(image_path, classes=[0], verbose=False)
+            # Run inference with text prompt
+            # SAM 3 supports text prompts for segmentation/detection
+            results = self.model(image_path, bboxes=None, points=None, labels=None, text="person", verbose=False)
             
             count = 0
             
