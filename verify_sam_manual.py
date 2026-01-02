@@ -6,7 +6,7 @@ import numpy as np
 # Add backend to path so we can import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from backend.inference.yolo_engine import inference_engine
+from backend.inference.sam_engine import sam_engine
 
 def test_sam_integration():
     print("Testing SAM 3 Integration...")
@@ -23,7 +23,7 @@ def test_sam_integration():
         
     # Run detection
     print(f"Running detection on {img_path}")
-    count = inference_engine.detect_people(img_path, zones=[])
+    count = sam_engine.detect_people(img_path, zones=[])
     
     print(f"Detection Result: {count} people found.")
     

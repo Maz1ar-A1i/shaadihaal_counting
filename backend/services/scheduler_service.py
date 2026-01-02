@@ -7,7 +7,7 @@ import os
 from ..database import SessionLocal
 from ..models import Camera, CaptureSession, CaptureResult, CameraSessionStat, HallSessionStat
 from .camera_service import CameraService
-from ..inference.sam3_engine import sam3_engine
+from ..inference.sam_engine import sam_engine
 import csv
 
 logger = logging.getLogger(__name__)
@@ -198,7 +198,7 @@ class SchedulerService:
             # Run Inference
             # Get zones
             zones = [z.points for z in cam.zones]
-            count = sam3_engine.detect_people(filepath, zones)
+            count = sam_engine.detect_people(filepath, zones)
             
             # Save Result
             result = CaptureResult(
